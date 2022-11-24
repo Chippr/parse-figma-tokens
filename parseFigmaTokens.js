@@ -12,9 +12,12 @@ const parseTokens = (input, output) => {
 					JSON.stringify(
 						parsedToken,
 						(key, value) => {
-							if (key === "value" && value.constructor === Object) {
+							if (value.constructor === Object && value.value !== undefined) {
+								if (typeof value.value === "string") {
+									return value.value;
+								}
 								return Object.fromEntries(
-									Object.entries(value)
+									Object.entries(value.value)
 										.map(([k, v]) => [
 											k,
 											v.replace(
@@ -29,11 +32,6 @@ const parseTokens = (input, output) => {
 										])
 										.filter(([_, value]) => value !== "")
 								);
-							} else if (
-								value.constructor === Object &&
-								typeof value.value === "string"
-							) {
-								return value.value;
 							} else {
 								return value;
 							}

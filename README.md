@@ -32,10 +32,9 @@ const [input, output] = process.argv.slice(2);
 
 await parseTokens(input, output);
 ```
-Once the `parseFigmaTokens.mjs` is created, we can run the following script as a build step or in the terminal. _Note that we include an example path, replace this with your own pathnames._
+Once the `parseFigmaTokens.mjs` is created, we can run the following script as a build step in your `package.json` or in the terminal. _Note that we include an example path, replace this with your own pathnames._
 
 ```json
-// package.json
  "scripts": {
   "postinstall": "node parseFigmaTokens.mjs src/figma-token/token.json src/figma-token/output/token.ts",
  },

@@ -1,0 +1,25 @@
+{
+  "name": "parse-figma-tokens",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "a package to parse figma tokens to a typescript file",
+  "main": "parseFigmaTokens.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Chippr/parse-figma-tokens.git"
+  },
+  "keywords": [
+    "figma",
+    "tokens",
+    "figma-tokens"
+  ],
+  "author": "Chippr",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Chippr/parse-figma-tokens/issues"
+  },
+  "homepage": "https://github.com/Chippr/parse-figma-tokens#readme"
+}

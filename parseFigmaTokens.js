@@ -47,6 +47,61 @@ const recursionHelper = (target, accumulator, rootKey) => {
 const hasComputedMembers = value =>
 	Object.values(value).some(value => value.constructor === Object);
 
+const stringifyTsFile = accumulatorObj => {
+	return Object.entries(accumulatorObj)
+		.sort((a, b) =>
+			hasComputedMembers(a[1]) ? (hasComputedMembers(b[1]) ? 0 : 1) : -1
+		)
+		.map(([key, value]) => {
+			const isComputed = hasComputedMembers(value);
+			const storage = isComputed ? "const " : "const enum ";
+
+			return (
+				"export " +
+				storage +
+				key +
+				(isComputed ? " =" : "") +
+				" {\n  " +
+				Object.entries(value)
+					.map(
+						([key, value]) =>
+							key +
+							` ${isComputed ? ":" : "="} ` +
+							(value.constructor === Object
+								? JSON.stringify(value, (_, value) => {
+										if (typeof value !== "string" || !value.startsWith("{")) {
+											return value;
+										}
+
+										const mainKey = value.slice(1, -1).split(".")[0];
+										return accumulatorObj[mainKey] ? value : undefined;
+								  }).replace(/"{|}"/g, "")
+								: String(Number(value)) === value
+								? value
+								: `"${value}"`)
+					)
+					.join(",\n  ") +
+				"\n}"
+			);
+		})
+		.join("\n\n");
+};
+
+const stringifyScssFile = accumulatorObj =>
+	":root {\n" +
+	Object.entries(accumulatorObj)
+		.filter(([_, value]) => !hasComputedMembers(value))
+		.map(([key, value]) =>
+			Object.entries(value)
+				.map(
+					([propertyName, propertyValue]) =>
+						`  --${key}-${propertyName}: ${propertyValue.toLowerCase()};`
+				)
+				.join("\n")
+		)
+		.join("\n") +
+	"\n}";
+
 const parseTokens = (input, output) => {
 	return readFile(input, "utf-8").then(data => {
 		const parsedToken = JSON.parse(data).global;
@@ -55,49 +110,10 @@ const parseTokens = (input, output) => {
 			const accumulatorObj = {};
 			recursionHelper(parsedToken, accumulatorObj);
 
-			return writeFile(
-				output,
-				Object.entries(accumulatorObj)
-					.sort((a, b) =>
-						hasComputedMembers(a[1]) ? (hasComputedMembers(b[1]) ? 0 : 1) : -1
-					)
-					.map(([key, value]) => {
-						const isComputed = hasComputedMembers(value);
-						const storage = isComputed ? "const " : "const enum ";
-
-						return (
-							"export " +
-							storage +
-							key +
-							(isComputed ? " =" : "") +
-							" {\n  " +
-							Object.entries(value)
-								.map(
-									([key, value]) =>
-										key +
-										` ${isComputed ? ":" : "="} ` +
-										(value.constructor === Object
-											? JSON.stringify(value, (_, value) => {
-													if (
-														typeof value !== "string" ||
-														!value.startsWith("{")
-													) {
-														return value;
-													}
-
-													const mainKey = value.slice(1, -1).split(".")[0];
-													return accumulatorObj[mainKey] ? value : undefined;
-											  }).replace(/"{|}"/g, "")
-											: String(Number(value)) === value
-											? value
-											: `"${value}"`)
-								)
-								.join(",\n  ") +
-							"\n}"
-						);
-					})
-					.join("\n\n")
-			);
+			return Promise.all([
+				writeFile(output + ".ts", stringifyTsFile(accumulatorObj)),
+				writeFile(output + ".scss", stringifyScssFile(accumulatorObj)),
+			]);
 		});
 	});
 };

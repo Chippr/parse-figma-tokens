@@ -1,45 +1,104 @@
 import { readFile, writeFile, mkdir } from "fs/promises";
 import { dirname } from "path";
 
+const ensureValidKey = key => key.replace(/^\d/, match => `_${match}`);
+
+const camelCase = key =>
+	key.replace(/(?:\s+|-)[a-z0-9]/gi, match => match.slice(-1).toUpperCase());
+
+const pascalCase = key => {
+	const camelCasedKey = camelCase(key);
+
+	return camelCasedKey[0].toUpperCase() + camelCasedKey.slice(1);
+};
+
+const recursionHelper = (target, accumulator, rootKey) => {
+	return Object.entries(target).forEach(([key, value]) => {
+		if (value.constructor !== Object) return;
+		if (value.type !== undefined) {
+			const entityName = pascalCase(rootKey ?? key);
+
+			accumulator[entityName] ??= {};
+			accumulator[entityName][ensureValidKey(pascalCase(key))] =
+				value.value.constructor === Object
+					? Object.fromEntries(
+							Object.entries(value.value)
+								.map(([k, v]) => [
+									camelCase(k),
+									v.replace(
+										/{[^}]+}/g,
+										match =>
+											`{${match
+												.slice(1, -1)
+												.split(".")
+												.map(key => ensureValidKey(pascalCase(key)))
+												.join(".")}}`
+									),
+								])
+								.filter(([_, value]) => value !== "")
+					  )
+					: value.value;
+		} else {
+			recursionHelper(value, accumulator, rootKey ?? key);
+		}
+	});
+};
+
+const hasComputedMembers = value =>
+	Object.values(value).some(value => value.constructor === Object);
+
 const parseTokens = (input, output) => {
 	return readFile(input, "utf-8").then(data => {
 		const parsedToken = JSON.parse(data).global;
 
-		mkdir(dirname(output), { recursive: true }).then(() =>
-			writeFile(
+		return mkdir(dirname(output), { recursive: true }).then(() => {
+			const accumulatorObj = {};
+			recursionHelper(parsedToken, accumulatorObj);
+
+			return writeFile(
 				output,
-				"export default " +
-					JSON.stringify(
-						parsedToken,
-						(key, value) => {
-							if (value.constructor === Object && value.value !== undefined) {
-								if (typeof value.value === "string") {
-									return value.value;
-								}
-								return Object.fromEntries(
-									Object.entries(value.value)
-										.map(([k, v]) => [
-											k,
-											v.replace(
-												/{[^}]+}/g,
-												match =>
-													match
-														.slice(1, -1)
-														.split(".")
-														.reduce((target, key) => target?.[key], parsedToken)
-														?.value ?? ""
-											),
-										])
-										.filter(([_, value]) => value !== "")
-								);
-							} else {
-								return value;
-							}
-						},
-						2
+				Object.entries(accumulatorObj)
+					.sort((a, b) =>
+						hasComputedMembers(a[1]) ? (hasComputedMembers(b[1]) ? 0 : 1) : -1
 					)
-			)
-		);
+					.map(([key, value]) => {
+						const isComputed = hasComputedMembers(value);
+						const storage = isComputed ? "const " : "const enum ";
+
+						return (
+							"export " +
+							storage +
+							key +
+							(isComputed ? " =" : "") +
+							" {\n  " +
+							Object.entries(value)
+								.map(
+									([key, value]) =>
+										key +
+										` ${isComputed ? ":" : "="} ` +
+										(value.constructor === Object
+											? JSON.stringify(value, (_, value) => {
+													if (
+														typeof value !== "string" ||
+														!value.startsWith("{")
+													) {
+														return value;
+													}
+
+													const mainKey = value.slice(1, -1).split(".")[0];
+													return accumulatorObj[mainKey] ? value : undefined;
+											  }).replace(/"{|}"/g, "")
+											: String(Number(value)) === value
+											? value
+											: `"${value}"`)
+								)
+								.join(",\n  ") +
+							"\n}"
+						);
+					})
+					.join("\n\n")
+			);
+		});
 	});
 };
 
